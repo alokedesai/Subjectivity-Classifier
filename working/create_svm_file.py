@@ -22,7 +22,7 @@ class SvmInput:
           words_seen.add(word)
 
     for word in self.idf.keys():
-      self.idf[word] = math.log(len(self.in_file) / self.idf[word])
+      self.idf[word] = math.log10(len(self.in_file) / self.idf[word])
 
   def read_stoplist(self, stop_file):
     stoplist = open(stop_file, "r").readlines()
@@ -51,20 +51,22 @@ class SvmInput:
 
     # normalize by length of text
     for word in count:
-      count[word] = count[word] / float(len(text))
+      count[word] = count[word] / float(len(words))
+
     return count
 
 
   # really inefficient way to implement this, but we'll fix it in the future
   # when we have some time
   def get_tfidf(self, text):
-    tf = self.get_tf(text)
+    tf = self.get_word_counts(text)
     
     for word in tf.keys():
       tf[word] = tf[word] * self.idf[word]
+
     return tf
 
-  def create_bow_file(self, feature_type):
+  def create_bow_file(self, feature_type, min_frequency):
     features = {}
     feature_count = 1
 
@@ -87,15 +89,19 @@ class SvmInput:
           printme[features[tok]] = counts[tok]
 
       for fnum in sorted(printme):
-        self.out_file.write(" " + str(fnum) + ":" + str(printme[fnum]))
+        if printme[fnum] >= min_frequency:
+          self.out_file.write(" " + str(fnum) + ":" + str(printme[fnum]))
       self.out_file.write("\n")
 
 
-  def create_word_count_file(self):
-    self.create_bow_file(self.get_word_counts)
+  def create_word_count_file(self, min_frequency):
+    self.create_bow_file(self.get_word_counts, min_frequency)
 
-  def create_tf_file(self):
-    self.create_bow_file(self.get_tf)
+  def create_tf_file(self, min_frequency):
+    self.create_bow_file(self.get_tf, min_frequency)
+
+  def create_tfidf_file(self, min_frequency):
+    self.create_bow_file(self.get_word_counts, min_frequency)
 
 
 
@@ -104,5 +110,5 @@ class SvmInput:
 # out = sys.argv[3]
 
 svm_factory = SvmInput("data/data.txt", "test_feature.txt", "model.svm", "stop.txt")
-svm_factory.create_tf_file()
-# svm_factory.create_word_count_file()
+# svm_factory.create_tf_file()
+svm_factory.create_word_count_file(1)
