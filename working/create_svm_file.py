@@ -8,16 +8,33 @@ class SvmInput:
     self.feature_file = open(feature_file, "w")
     self.out_file = open(out_file, "w")
     self.stop = self.read_stoplist(stop_file)
+    
+    # info for Mutual Information
+    self.num_objective = 0
+    self.num_subjective = 0
+    self.word_frequency = {}
 
+    # calculate idf
     self.idf = {}
     for text in self.in_file:
-      line = text.split("\t")[1]
+      label, line = text.split("\t")
+
+      if label == "1":
+        self.num_objective += 1
+      else:
+        self.num_subjective += 1
+
+      if label not in self.word_frequency:
+        self.word_frequency[label] = {}
 
       words_seen = set()
       for word in line.split(" "):
-
         word = word.rstrip()
-        if word not in words_seen:
+
+        if word not in words_seen and word not in self.stop:
+          previous_count = self.word_frequency[label].get(word, 0)
+          self.word_frequency[label][word] = previous_count + 1
+
           self.idf[word] = self.idf.get(word, 0) + 1
           words_seen.add(word)
 
@@ -56,8 +73,6 @@ class SvmInput:
     return count
 
 
-  # really inefficient way to implement this, but we'll fix it in the future
-  # when we have some time
   def get_tfidf(self, text):
     tf = self.get_word_counts(text)
     
@@ -88,11 +103,12 @@ class SvmInput:
 
           printme[features[tok]] = counts[tok]
 
-      for fnum in sorted(printme):
-        if printme[fnum] >= min_frequency:
-          self.out_file.write(" " + str(fnum) + ":" + str(printme[fnum]))
-      self.out_file.write("\n")
+      self.create_svm_file(printme)
 
+  def create_svm_file(self, print_info):
+    for fnum in sorted(print_info):
+      self.out_file.write(" " + str(fnum) + ":" + str(print_info[fnum]))
+    self.out_file.write("\n")
 
   def create_word_count_file(self, min_frequency):
     self.create_bow_file(self.get_word_counts, min_frequency)
