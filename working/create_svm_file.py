@@ -8,12 +8,15 @@ class SvmInput:
     self.feature_file = open(feature_file, "w")
     self.out_file = open(out_file, "w")
     self.stop = self.read_stoplist(stop_file)
+
+    self.features = {}
     
     # info for Mutual Information
     self.num_objective = 0
     self.num_subjective = 0
     self.word_frequency = {}
 
+    self.selected_features = []
     # calculate idf
     self.idf = {}
     for text in self.in_file:
@@ -81,8 +84,8 @@ class SvmInput:
 
     return tf
 
-  def create_bow_file(self, feature_type, min_frequency):
-    features = {}
+  def create_bow_file(self, feature_type):
+    self.features = {}
     feature_count = 1
 
     for line in self.in_file:
@@ -90,41 +93,75 @@ class SvmInput:
       label, text = line.split("\t")
 
       counts = feature_type(text)
+      
       self.out_file.write(label)
 
       printme = {}
-      for tok in counts.keys():
-        if (tok not in self.stop):
-          if (tok not in features):
-            features[tok] = feature_count
-            self.feature_file.write(str(feature_count) + "\t" + tok + "\n")
+      for word in counts.keys():
+        if (word not in self.stop):
+          if (word not in self.features):
+            self.features[word] = feature_count
+            self.feature_file.write(str(feature_count) + "\t" + word + "\n")
 
             feature_count+=1
 
-          printme[features[tok]] = counts[tok]
-
+          printme[self.features[word]] = counts[word]
       self.create_svm_file(printme)
 
   def create_svm_file(self, print_info):
     for fnum in sorted(print_info):
-      self.out_file.write(" " + str(fnum) + ":" + str(print_info[fnum]))
+      if not self.selected_features or fnum in self.selected_features:
+        self.out_file.write(" " + str(fnum) + ":" + str(print_info[fnum]))
     self.out_file.write("\n")
 
-  def create_word_count_file(self, min_frequency):
-    self.create_bow_file(self.get_word_counts, min_frequency)
+  def create_word_count_file(self):
+    self.create_bow_file(self.get_word_counts)
 
-  def create_tf_file(self, min_frequency):
-    self.create_bow_file(self.get_tf, min_frequency)
+  def create_tf_file(self):
+    self.create_bow_file(self.get_tf)
 
-  def create_tfidf_file(self, min_frequency):
-    self.create_bow_file(self.get_word_counts, min_frequency)
+  def create_tfidf_file(self):
+    self.create_bow_file(self.get_word_counts)
 
+  def feature_selection(self, num_features = None):
+    num_documents = float(self.num_objective + self.num_subjective)
 
+    mutual_information = {}
+    
+    # compute mutual information
+    for word in self.features:
+      objective_count = self.word_frequency["1"].get(word, 0)
+      objective_count = objective_count if objective_count != 0 else 1
 
+      subjective_count = self.word_frequency["-1"].get(word, 0)
+      subjective_count = subjective_count if subjective_count != 0 else 1
+
+      docs_with_word = subjective_count + objective_count
+      docs_without_word = num_documents - docs_with_word
+
+      first = (objective_count / num_documents) * math.log(((num_documents * objective_count)/ float(docs_with_word*self.num_objective)),2)
+      second = ((self.num_objective - objective_count) / num_documents) * math.log(((num_documents * (self.num_objective - objective_count)) / float(docs_without_word*self.num_objective)), 2)
+
+      third = (subjective_count / num_documents) * math.log(((num_documents * subjective_count) / float(docs_with_word * self.num_subjective)), 2)
+      fourth = ((self.num_subjective - subjective_count) / num_documents) * math.log(((num_documents * (self.num_subjective - subjective_count)) / float(docs_without_word * self.num_subjective)), 2)
+
+      mutual_information[word] = first + second + third + fourth
+
+    # convert mutual info to tuple list and sort
+    mutual_info_tuple = [(k,v) for k,v in mutual_information.iteritems()]
+    mutual_info_tuple = sorted(mutual_info_tuple, key= lambda x: x[1], reverse=True)
+    
+    if num_features:
+      self.selected_features = [self.features[x[0]] for x in mutual_info_tuple[:num_features]]
+    else:
+      self.selected_features = [self.features[x[0]] for x in mutual_info_tuple]
+    print self.selected_features
 # data_file = sys.argv[1]
 # stoplist = sys.argv[2]
 # out = sys.argv[3]
 
 svm_factory = SvmInput("data/data.txt", "test_feature.txt", "model.svm", "stop.txt")
 # svm_factory.create_tf_file()
-svm_factory.create_word_count_file(1)
+svm_factory.create_word_count_file()
+svm_factory.feature_selection(10)
+svm_factory.create()
