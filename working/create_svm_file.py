@@ -1,12 +1,14 @@
 import math
 import sys
+import subprocess
 
-class SvmInput:
+class SvmClassifier:
   
   def __init__(self, in_file, feature_file, out_file, stop_file):
     self.in_file = open(in_file, "r").readlines()
     self.feature_file = open(feature_file, "w")
-    self.out_file = open(out_file, "w")
+    self.out_file = None
+    self.out_file_name =  out_file
     self.stop = self.read_stoplist(stop_file)
 
     self.features = {}
@@ -17,7 +19,8 @@ class SvmInput:
     self.word_frequency = {}
 
     self.selected_features = []
-    # calculate idf
+
+    # calculate document frequency
     self.idf = {}
     for text in self.in_file:
       label, line = text.split("\t")
@@ -41,6 +44,7 @@ class SvmInput:
           self.idf[word] = self.idf.get(word, 0) + 1
           words_seen.add(word)
 
+    # update idf dictionary to be idf
     for word in self.idf.keys():
       self.idf[word] = math.log10(len(self.in_file) / self.idf[word])
 
@@ -84,45 +88,53 @@ class SvmInput:
 
     return tf
 
-  def create_bow_file(self, feature_type):
+  # populates feature dictionary
+  def populate_features(self, feature_type):
     self.features = {}
     feature_count = 1
-
     for line in self.in_file:
       line = line.rstrip()
       label, text = line.split("\t")
 
       counts = feature_type(text)
-      
+      for word in counts.keys():
+        if word not in self.stop:
+          if word not in self.features:
+            self.features[word] = feature_count
+            self.feature_file.write(str(feature_count) + "\t" + word + "\n")
+            feature_count += 1
+  
+  # creates svm files
+  def print_svm(self, feature_type):
+    self.out_file = open(self.out_file_name, "w")
+    for line in self.in_file:
+      line = line.rstrip()
+      label, text = line.split("\t")
+
+      counts = feature_type(text)
       self.out_file.write(label)
 
       printme = {}
       for word in counts.keys():
-        if (word not in self.stop):
-          if (word not in self.features):
-            self.features[word] = feature_count
-            self.feature_file.write(str(feature_count) + "\t" + word + "\n")
-
-            feature_count+=1
-
+        if word not in self.stop:
           printme[self.features[word]] = counts[word]
-      self.create_svm_file(printme)
+            
+      for fnum in sorted(printme):
+        if not self.selected_features or fnum in self.selected_features:
+          self.out_file.write(" " + str(fnum) + ":" + str(printme[fnum]))
+      self.out_file.write("\n")
+    self.out_file.close()
 
-  def create_svm_file(self, print_info):
-    for fnum in sorted(print_info):
-      if not self.selected_features or fnum in self.selected_features:
-        self.out_file.write(" " + str(fnum) + ":" + str(print_info[fnum]))
-    self.out_file.write("\n")
+  def unigram_counts(self):
+    self.populate_features(self.get_word_counts)
 
-  def create_word_count_file(self):
-    self.create_bow_file(self.get_word_counts)
+  def term_frequency(self):
+    self.populate_features(self.get_tf)
 
-  def create_tf_file(self):
-    self.create_bow_file(self.get_tf)
+  def tfidf(self):
+    self.populate_features(self.get_word_counts)
 
-  def create_tfidf_file(self):
-    self.create_bow_file(self.get_word_counts)
-
+  # returns the top n features using feature_selection
   def feature_selection(self, num_features = None):
     num_documents = float(self.num_objective + self.num_subjective)
 
@@ -155,13 +167,40 @@ class SvmInput:
       self.selected_features = [self.features[x[0]] for x in mutual_info_tuple[:num_features]]
     else:
       self.selected_features = [self.features[x[0]] for x in mutual_info_tuple]
-    print self.selected_features
-# data_file = sys.argv[1]
-# stoplist = sys.argv[2]
-# out = sys.argv[3]
 
-svm_factory = SvmInput("data/data.txt", "test_feature.txt", "model.svm", "stop.txt")
-# svm_factory.create_tf_file()
-svm_factory.create_word_count_file()
-svm_factory.feature_selection(10)
-svm_factory.create()
+svm_factory = SvmClassifier("data/data.txt", "test_feature.txt", "model.svm", "stop.txt")
+
+# svm_factory.unigram_counts()
+# svm_factory.feature_selection(200)
+# svm_factory.print_svm(svm_factory.get_word_counts)
+
+# run svm light and return a tuple of the accuracy and the f1
+def run_svm_light(svm_file):
+  divide(svm_file)
+  subprocess.check_output(["../svm_learn", "train.svm", "test.model"])
+  result = subprocess.check_output(["../svm_classify", "test.svm", "test.model"])
+  return "\n".join(result.split("\n")[3:5])
+
+def divide(svm_file):
+  in_file = open(svm_file, "r").readlines()
+
+  test = len(in_file)/10
+  train = 9*test
+
+  test_lines = in_file[:test]  
+  train_lines = in_file[-train:]
+
+  test_file = open("test.svm", "w")
+  train_file = open("train.svm", "w")
+
+  test_file.writelines(test_lines)
+  train_file.writelines(train_lines)
+
+for i in xrange(10, 28000, 100):
+  svm_factory.unigram_counts()
+  svm_factory.feature_selection(i)
+  svm_factory.print_svm(svm_factory.get_word_counts)
+  
+  result = run_svm_light("model.svm")
+  print str(i) + "\t" + result.split("\n")[0][22:28] + "\t" + result.split("\n")[1][30:37] + "\t" + result.split("\n")[1][38:44]
+ 
