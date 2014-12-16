@@ -1,3 +1,11 @@
+"""
+Main file to create feature set from our corpus.
+Feature set is written to an svm file in the proper format for running SVM Light
+We then run SVM Light and print out results
+
+authors: Aloke Desai and Garrett Wells
+"""
+
 import math
 import sys
 import subprocess
@@ -6,7 +14,12 @@ import random
 
 class FeatureMaker:
     def __init__(self, documents):
-        # document_list is a list of tuples [(lable, [word, word])]
+        """
+        set up variables
+        :param documents: list of documents
+            formatted as a list of tuples [(label, body)]
+            where the body is a list of words stripped of stopwords
+        """
         self.document_list = documents
 
         self.feature_count = 1
@@ -42,8 +55,12 @@ class FeatureMaker:
         for word in self.idf.keys():
             self.idf[word] = math.log10(len(self.document_list) / float(self.idf[word]))
 
-
     def tf_idf(self, text):
+        """
+        Calculates tf-idf values for an article
+        text: article body as list of words
+        returns: tf-idf values in a dictionary
+        """
         counts = unigram_counts(text)
         for word in counts:
             counts[word] *= self.idf[word]
@@ -52,7 +69,10 @@ class FeatureMaker:
 
     def add_feature(self, feature_function):
         """
-        adds new feature
+        Adds a new feature to the feature dictioanry
+        :param feature_function: a function to calculate a feature, such as
+            tf-idf or unigram counts
+        :return: void
         """
         document_id = 0
         for document in self.document_list:
@@ -84,6 +104,11 @@ class FeatureMaker:
             document_id += 1
 
     def print_feature_mapping(self, feature_file_path):
+        """
+        writes feature mapping dictionary to file
+        :param feature_file_path: filepath
+        :return: void
+        """
         feature_file = open(feature_file_path, "w")
         for feature, feature_number in sorted(self.feature_mapping.items(), key=lambda f:f[1]):
             out_string = "%d\t%s\n" % (feature_number, str(feature))
@@ -91,6 +116,11 @@ class FeatureMaker:
         feature_file.close()
 
     def print_svm_file(self, svm_file_path):
+        """
+        writes feature dictionary to an svm file, formatted properly
+        :param svm_file_path: filepath of svm file
+        :return: void
+        """
         svm_file = open(svm_file_path, "w")
         for document_id in self.features.keys():
             label = self.label_mapping[document_id]
@@ -107,41 +137,13 @@ class FeatureMaker:
             svm_file.write("\n")
         svm_file.close()
 
-    def mutual_information(self, feature):
-        self.objective_features = {"export": 49}
-        self.subjective_features = {"export": 27652}
-        self.num_objective = 190
-        self.num_subjective = 801758
-        # number_of_documents = len(self.document_list)
-        number_of_documents = self.num_subjective + self.num_objective
-        info_score = 0
-        for label in range(0,2):
-            for present in range(0,2):
-
-                # get dictionary
-                if label == 0:
-                    dict_type = self.objective_features
-                    num_of_type = self.num_objective
-                else:
-                    dict_type = self.subjective_features
-                    num_of_type = self.num_subjective
-
-                if present == 1:
-                    prob_of_feature_and_label = dict_type[feature] / float(num_of_type)
-                else:
-                    prob_of_feature_and_label = (num_of_type - dict_type[feature]) / float(num_of_type)
-
-                prob_of_label = num_of_type / float(number_of_documents)
-                prob_of_feature = (self.objective_features[feature] + self.subjective_features[feature]) / float(number_of_documents)
-
-                total_prob = prob_of_feature_and_label * math.log(prob_of_feature_and_label / (prob_of_label * prob_of_feature), 2)
-                info_score += total_prob
-        return info_score
-
-    # returns the top n features using feature_selection
-
-
     def feature_selection(self, num_features = None, print_features = False):
+        """
+        Calculates mutual information for a feature and performs feature selection on the best features
+        :param num_features: how many top features to select
+        :param print_features: whether to print out top features
+        :return: void
+        """
         self.word_frequency = {"1": self.objective_features, "-1": self.subjective_features}
         num_documents = float(self.num_objective + self.num_subjective)
 
@@ -181,25 +183,27 @@ class FeatureMaker:
                 print "%s\t%.4f" % (feature, prob)
 
 
-strip_list = ["'s"]
-
 stemmer = PorterStemmer()
 
-def unigram_counts_stripped(text):
-    counts = {}
-    for word in text:
-        if word not in strip_list:
-            counts[word] = counts.get(word, 0) +1
-    return counts
 
 def unigram_counts(text):
-    """get word counts in a single document"""
+    """
+    Calcualtes unigram counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for word in text:
         counts[word] = counts.get(word,0) + 1
     return counts
 
+
 def unigram_present(text):
+    """
+    Calcualtes unigram occurrence counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for word in text:
         counts[word] = 1
@@ -207,13 +211,23 @@ def unigram_present(text):
 
 
 def unigram_probs(text):
-    """normalize counts by length of text"""
+    """
+    Calculates unigram probabilities for a document
+    :param text: document
+    :return: dictionary of probabilities
+    """
     counts = unigram_counts(text)
     for word in counts:
         counts[word] /= float(len(text))
     return counts
 
+
 def bigram_prob(text):
+    """
+    Calculates bigram probabilities for a document
+    :param text: document
+    :return: dictionary of probabilities
+    """
     counts = bigram_counts(text)
     num_bigrams = sum(counts.values())
 
@@ -221,7 +235,13 @@ def bigram_prob(text):
         counts[word] /= float(num_bigrams)
     return counts
 
+
 def bigram_counts(text):
+    """
+    Calculates bigram counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for i in xrange(len(text)-1):
         current = text[i]
@@ -232,6 +252,11 @@ def bigram_counts(text):
 
 
 def trigram_counts(text):
+    """
+    Calculates trigram counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for i in range(len(text) - 2):
         first = text[i]
@@ -241,7 +266,13 @@ def trigram_counts(text):
         counts[tpl] = counts.get(tpl, 0) + 1
     return counts
 
+
 def bigram_present(text):
+    """
+    Calculates bigram occurrence counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for i in xrange(len(text)-1):
         current = text[i]
@@ -250,7 +281,13 @@ def bigram_present(text):
         counts[tpl] = 1
     return counts
 
+
 def trigram_present(text):
+    """
+    Calculates trigram occurrence counts for a document
+    :param text: document
+    :return: dictionary of counts
+    """
     counts = {}
     for i in range(len(text) - 2):
         first = text[i]
@@ -260,7 +297,13 @@ def trigram_present(text):
         counts[tpl] = 1
     return counts
 
+
 def divide(svm_file):
+    """
+    divides an svm file into training and testing files
+    :param svm_file: filepath to svm file
+    :return:
+    """
     in_file = open(svm_file, "r").readlines()
 
     test = len(in_file)/10
@@ -277,6 +320,11 @@ def divide(svm_file):
 
 
 def normalize(vector):
+    """
+    length normalize a feature vector
+    :param vector: dictionary of features
+    :return: void
+    """
     total = 0
     for key in vector:
         total += vector[key]**2
@@ -285,21 +333,40 @@ def normalize(vector):
 
 
 def run_svm_light(svm_file):
+    """
+    run svm light on our training and testing data
+    :param svm_file: filepath of svm file
+    :return: accuracy, precision and recall as a string
+    """
     divide(svm_file)
     subprocess.check_output(["./svm_learn", "train.svm", "model.txt"])
     result = subprocess.check_output(["./svm_classify", "test.svm", "model.txt", "result.out"])
     return "\n".join(result.split("\n")[3:5])
 
+
 def stem(text):
+    """
+    run porter stemmer on a text
+    :param text: text
+    :return: stemmed text
+    """
     return [stemmer.stem(word) for word in text]
 
+
 def shuffle(svm_file):
+    """
+    randomly shuffle svm fie
+    :param svm_file: svm filepath
+    :return: void
+    """
     with open(svm_file, "r") as source:
         data = [(random.random(), line) for line in source]
     data.sort()
     with open(svm_file, "w") as target:
         for _, line in data:
             target.write(line)
+
+
 def main():
     to_stem = False
     #read stoplist
@@ -352,8 +419,5 @@ def main():
             accuracy += float(result.split("\n")[0][22:27])
         accuracy = "{0:.2f}".format(accuracy / float(num_iterations))
         print str(i) + "\t" + accuracy + "%"
-
-
-
 
 if __name__ == "__main__": main()
