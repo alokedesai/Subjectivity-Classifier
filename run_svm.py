@@ -2,6 +2,7 @@ import math
 import sys
 import subprocess
 from nltk.stem.porter import *
+import random
 
 class FeatureMaker:
     def __init__(self, documents):
@@ -140,7 +141,7 @@ class FeatureMaker:
     # returns the top n features using feature_selection
 
 
-    def feature_selection(self, num_features = None):
+    def feature_selection(self, num_features = None, print_features = False):
         self.word_frequency = {"1": self.objective_features, "-1": self.subjective_features}
         num_documents = float(self.num_objective + self.num_subjective)
 
@@ -174,8 +175,10 @@ class FeatureMaker:
         else:
             self.selected_features = [self.feature_mapping[x[0]] for x in mutual_info_tuple]
 
-        for feature, prob in mutual_info_tuple[:100]:
-            print "%s\t%.4f" % (feature, prob)
+        # prints out top 100 features
+        if print_features:
+            for feature, prob in mutual_info_tuple[:30]:
+                print "%s\t%.4f" % (feature, prob)
 
 
 strip_list = ["'s"]
@@ -208,6 +211,14 @@ def unigram_probs(text):
     counts = unigram_counts(text)
     for word in counts:
         counts[word] /= float(len(text))
+    return counts
+
+def bigram_prob(text):
+    counts = bigram_counts(text)
+    num_bigrams = sum(counts.values())
+
+    for word in counts:
+        counts[word] /= float(num_bigrams)
     return counts
 
 def bigram_counts(text):
@@ -276,12 +287,19 @@ def normalize(vector):
 def run_svm_light(svm_file):
     divide(svm_file)
     subprocess.check_output(["./svm_learn", "train.svm", "model.txt"])
-    result = subprocess.check_output(["./svm_classify", "test.svm", "model.txt"])
+    result = subprocess.check_output(["./svm_classify", "test.svm", "model.txt", "result.out"])
     return "\n".join(result.split("\n")[3:5])
 
 def stem(text):
     return [stemmer.stem(word) for word in text]
 
+def shuffle(svm_file):
+    with open(svm_file, "r") as source:
+        data = [(random.random(), line) for line in source]
+    data.sort()
+    with open(svm_file, "w") as target:
+        for _, line in data:
+            target.write(line)
 def main():
     to_stem = True
     #read stoplist
@@ -308,14 +326,26 @@ def main():
     # classifier.add_feature(unigram_probs)
     # classifier.add_feature(unigram_present)
     classifier.add_feature(bigram_present)
-    classifier.add_feature(trigram_present)
+    # classifier.add_feature(bigram_prob)
+    # classifier.add_feature(trigram_present)
 
-    classifier.feature_selection(1500)
+    classifier.feature_selection(2300)
 
     classifier.print_feature_mapping("feature_mapping.txt")
     classifier.print_svm_file("all_data.svm")
 
+    shuffle("all_data.svm")
+
     print run_svm_light("all_data.svm")
+
+    # code that calculates the top n features that maximizes accuracy
+    # for i in xrange(100, 10000, 100):
+    #     classifier.feature_selection(i)
+    #     classifier.print_svm_file("all_data.svm")
+    #     result = run_svm_light("all_data.svm")
+    #     print str(i) + "\t" + result.split("\n")[0][22:28] + "\t" + result.split("\n")[1][30:37] + "\t" + result.split("\n")[1][38:44]
+
+
 
 
 if __name__ == "__main__": main()
