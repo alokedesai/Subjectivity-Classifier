@@ -227,6 +227,14 @@ def trigram_counts(text):
         counts[tpl] = counts.get(tpl, 0) + 1
     return counts
 
+def bigram_present(text):
+    counts = {}
+    for i in xrange(len(text)-1):
+        current = text[i]
+        next = text[i+1]
+        tpl = (current, next)
+        counts[tpl] = 1
+    return counts
 
 def divide(svm_file):
     in_file = open(svm_file, "r").readlines()
@@ -254,8 +262,8 @@ def normalize(vector):
 
 def run_svm_light(svm_file):
     divide(svm_file)
-    subprocess.check_output(["../svm_learn", "train.svm", "model.txt"])
-    result = subprocess.check_output(["../svm_classify", "test.svm", "model.txt"])
+    subprocess.check_output(["./svm_learn", "train.svm", "model.txt"])
+    result = subprocess.check_output(["./svm_classify", "test.svm", "model.txt"])
     return "\n".join(result.split("\n")[3:5])
 
 
@@ -274,18 +282,20 @@ def main():
         split_text = [word for word in split_text if word not in stop_list]
         data.append((label, split_text))
     classifier = FeatureMaker(data)
-    classifier.add_feature(unigram_counts)
+    # classifier.add_feature(unigram_counts)
     # classifier.add_feature(bigram_counts)
     # classifier.add_feature(trigram_counts)
     # classifier.add_feature(classifier.tf_idf)
     # classifier.add_feature(unigram_probs)
-    # classifier.add_feature(unigram_present)
+    classifier.add_feature(unigram_present)
+    # classifier.add_feature(bigram_present)
+
     classifier.feature_selection(1500)
 
     classifier.print_feature_mapping("feature_mapping.txt")
     classifier.print_svm_file("all_data.svm")
 
-    # print run_svm_light("all_data.svm")
+    print run_svm_light("all_data.svm")
 
 
 if __name__ == "__main__": main()
