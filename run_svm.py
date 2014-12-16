@@ -301,7 +301,7 @@ def shuffle(svm_file):
         for _, line in data:
             target.write(line)
 def main():
-    to_stem = True
+    to_stem = False
     #read stoplist
     stop_list = open("stop.txt").readlines()
     stop_list = [e.strip() for e in stop_list]
@@ -319,31 +319,39 @@ def main():
 
         data.append((label, split_text))
     classifier = FeatureMaker(data)
+    
     # classifier.add_feature(unigram_counts)
     # classifier.add_feature(bigram_counts)
     # classifier.add_feature(trigram_counts)
     # classifier.add_feature(classifier.tf_idf)
     # classifier.add_feature(unigram_probs)
     # classifier.add_feature(unigram_present)
-    classifier.add_feature(bigram_present)
-    # classifier.add_feature(bigram_prob)
+    # classifier.add_feature(bigram_present)
+    classifier.add_feature(bigram_prob)
     # classifier.add_feature(trigram_present)
 
-    classifier.feature_selection(2300)
+    # classifier.feature_selection(2700)
 
     classifier.print_feature_mapping("feature_mapping.txt")
     classifier.print_svm_file("all_data.svm")
 
-    shuffle("all_data.svm")
+    # shuffle("all_data.svm")
 
-    print run_svm_light("all_data.svm")
+    # print run_svm_light("all_data.svm")
 
     # code that calculates the top n features that maximizes accuracy
-    # for i in xrange(100, 10000, 100):
-    #     classifier.feature_selection(i)
-    #     classifier.print_svm_file("all_data.svm")
-    #     result = run_svm_light("all_data.svm")
-    #     print str(i) + "\t" + result.split("\n")[0][22:28] + "\t" + result.split("\n")[1][30:37] + "\t" + result.split("\n")[1][38:44]
+    for i in xrange(100, 10000, 100):
+        classifier.feature_selection(i)
+        classifier.print_svm_file("all_data.svm")
+        
+        accuracy = 0
+        num_iterations = 10
+        for num in xrange(num_iterations):
+            shuffle("all_data.svm")
+            result = run_svm_light("all_data.svm")
+            accuracy += float(result.split("\n")[0][22:27])
+        accuracy = "{0:.2f}".format(accuracy / float(num_iterations))
+        print str(i) + "\t" + accuracy + "%"
 
 
 
