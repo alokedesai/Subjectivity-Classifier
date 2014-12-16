@@ -1,6 +1,7 @@
 import math
 import sys
 import subprocess
+from nltk.stem.porter import *
 
 class FeatureMaker:
     def __init__(self, documents):
@@ -179,6 +180,8 @@ class FeatureMaker:
 
 strip_list = ["'s"]
 
+stemmer = PorterStemmer()
+
 def unigram_counts_stripped(text):
     counts = {}
     for word in text:
@@ -236,6 +239,16 @@ def bigram_present(text):
         counts[tpl] = 1
     return counts
 
+def trigram_present(text):
+    counts = {}
+    for i in range(len(text) - 2):
+        first = text[i]
+        second = text[i+1]
+        third = text[i+2]
+        tpl = (first, second, third)
+        counts[tpl] = 1
+    return counts
+
 def divide(svm_file):
     in_file = open(svm_file, "r").readlines()
 
@@ -266,8 +279,11 @@ def run_svm_light(svm_file):
     result = subprocess.check_output(["./svm_classify", "test.svm", "model.txt"])
     return "\n".join(result.split("\n")[3:5])
 
+def stem(text):
+    return [stemmer.stem(word) for word in text]
 
 def main():
+    to_stem = True
     #read stoplist
     stop_list = open("stop.txt").readlines()
     stop_list = [e.strip() for e in stop_list]
@@ -280,6 +296,9 @@ def main():
         label, text = line.split("\t")
         split_text = text.strip().split(" ")
         split_text = [word for word in split_text if word not in stop_list]
+        if to_stem:
+            split_text = stem(split_text)
+
         data.append((label, split_text))
     classifier = FeatureMaker(data)
     # classifier.add_feature(unigram_counts)
@@ -287,8 +306,9 @@ def main():
     # classifier.add_feature(trigram_counts)
     # classifier.add_feature(classifier.tf_idf)
     # classifier.add_feature(unigram_probs)
-    classifier.add_feature(unigram_present)
-    # classifier.add_feature(bigram_present)
+    # classifier.add_feature(unigram_present)
+    classifier.add_feature(bigram_present)
+    classifier.add_feature(trigram_present)
 
     classifier.feature_selection(1500)
 
